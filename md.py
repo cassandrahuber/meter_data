@@ -50,7 +50,12 @@ for subfolder in os.listdir(base_path):
 
         # create a list to store interpolated rows?
         # get the date range to create 15 min intervals
-        start
+
+        # create a new column of the closest 15min interval
+        df['interval_15min'] = df['datetime'].dt.round('15min')
+
+        # calculate seconds from the 15min mark (negative = before, positive = after)
+        df['seconds_from_interval'] = (df['datetime'] - df['interval_15min']).dt.total_seconds()
 
         # find the slope of two times closest to 15 min marks where it would be the 15 min mark exactly then add to the df
         for i, row in df.iterrows():

@@ -58,10 +58,6 @@ for subfolder in os.listdir(base_path):
         df['seconds_from_interval'] = (df['datetime'] - df['interval_15min']).dt.total_seconds()
 
         # find the slope of two times closest to 15 min marks where it would be the 15 min mark exactly then add to the df
-        for i, row in df.iterrows():
-            if df.at[i, 'datetime'].minute % 15 == 0 and df.at[i, 'datetime'].second == 0:
-                continue
-            elif df.at[i, 'datetime'].minute + 1 % 15 == 0:
 
 
         # find the kw average over 15 min intervals

@@ -1,4 +1,5 @@
 .ipynb_checkpoints/
 notebooks/step1.csv
-notebooks/combined_data_all_col.csv
+notebooks/save_data_col.csv
 md.py
+.DS_Store

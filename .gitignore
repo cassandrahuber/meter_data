@@ -3,3 +3,4 @@ notebooks/step1.csv
 notebooks/save_data_col.csv
 md.py
 .DS_Store
+notebooks/.DS_Store

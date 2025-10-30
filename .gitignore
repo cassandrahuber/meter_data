@@ -1,6 +1,10 @@
 .ipynb_checkpoints/
-notebooks/step1.csv
-notebooks/save_data_col.csv
-#md.py
+
+# ignore CSVs generated in notebooks
+notebooks/*.csv
+
+# ignore macOS system files
 .DS_Store
 notebooks/.DS_Store
+
+md.py

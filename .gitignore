@@ -9,3 +9,4 @@ notebooks/.DS_Store
 
 md.py
 notebooks/testmeter_data.ipynb
+*.csv

@@ -11,3 +11,4 @@ md.py
 notebooks/testmeter_data.ipynb
 *.csv
 *.pyc
+*.pdf

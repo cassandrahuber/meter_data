@@ -52,14 +52,14 @@ def process_kw_data(df, info_df):
     # create result dataframe categorized by the meter name and interval calculate the average of the 3 phase watt total
     result_df = df.groupby(['meter_name', 'interval'])['3_phase_watt_total'].mean().reset_index()
 
-    # create kw column, dividing by 1000 for EPM7000 meters
-    result_df['kw'] = result_df['3_phase_watt_total'].copy()
-    result_df.loc[result_df['meter_name'].isin(model_check), 'kw'] /= 1000
+    # create mean_kw column, dividing by 1000 for EPM7000 meters
+    result_df['mean_kw'] = result_df['3_phase_watt_total'].copy()
+    result_df.loc[result_df['meter_name'].isin(model_check), 'mean_kw'] /= 1000
 
     # rename and reorder columns, delete 3 phase column
     result_df.rename(columns={'interval': 'datetime'}, inplace=True)
     result_df.drop('3_phase_watt_total', axis=1, inplace=True)
-    result_df = result_df[['datetime', 'meter_name', 'kw']]
+    result_df = result_df[['datetime', 'meter_name', 'mean_kw']]
 
     return result_df
 
@@ -85,7 +85,11 @@ def load_data_for_comparison(brian_csv, aurora_csv):
     # merge the dataframes together on meter_name and datetime
     merged_df = pd.merge(brian_df, aurora_df, on=['meter_name', 'datetime'], how='outer')
     merged_df.columns = merged_df.columns.str.lower().str.replace(' ', '_')
-    
+
+    # if blue_pillar_kw column exists, rename it to mean for consistency with database
+    if 'blue_pillar_kw' in merged_df.columns:
+        merged_df.rename({'blue_pillar_kw': 'mean'}, inplace=True)
+
     # create list of unique meters
     meters = merged_df['meter_name'].unique()
 
@@ -93,7 +97,7 @@ def load_data_for_comparison(brian_csv, aurora_csv):
 
 def create_plots_pdf(merged_df, meters, filename):
     """
-    Create a PDF file with plots comparing Brian's and Aurora's kw data for each meter.
+    Create a PDF file with plots comparing Brian's 'mean_kw' and Aurora's 'mean' data for each meter.
 
     Parameters:
         merged_df (dataframe): Merged dataframe containing both Brian's and Aurora's data.
@@ -108,8 +112,8 @@ def create_plots_pdf(merged_df, meters, filename):
             meter_data = merged_df[merged_df['meter_name'] == meter].sort_values('datetime')
 
             plt.figure(figsize=(10, 6))
-            plt.plot(meter_data['datetime'], meter_data['kw'], label="kw", alpha=0.7) # alpha is opacity of the line
-            plt.plot(meter_data['datetime'], meter_data['blue_pillar_kw'], label="blue_pillar_kw", alpha=0.7)
+            plt.plot(meter_data['datetime'], meter_data['mean_kw'], label="brians_kw", alpha=0.7) # alpha is opacity of the line
+            plt.plot(meter_data['datetime'], meter_data['mean'], label="auroras_kw", alpha=0.7)
             
             plt.xlabel('datetime')
             plt.ylabel('kw')
@@ -127,7 +131,7 @@ def get_comparison_info(merged_df, meters):
     Create a dataframe summarizing the comparison between Brian's and Aurora's kw data for each meter.
 
     Parameters:
-        merged_df (dataframe): Merged dataframe containing both Brian's and Aurora's data.
+        merged_df (dataframe): Merged dataframe containing both Brian's ('mean_kw') and Aurora's data ('mean').
         meters (list): List of unique meter names.
     
     Returns:
@@ -150,17 +154,17 @@ def get_comparison_info(merged_df, meters):
         meter_data = merged_df[merged_df['meter_name'] == meter].sort_values('datetime')
         
         # check validity of brian's kw data for meter
-        if meter_data['kw'].all() == 0:
+        if meter_data['mean_kw'].all() == 0:
             info_df.loc[meter, 'brians'] = 'zeros'
-        elif meter_data['kw'].isna().all():
+        elif meter_data['mean_kw'].isna().all():
             info_df.loc[meter, 'brians'] = 'missing'
         else:
             info_df.loc[meter, 'brians'] = 'ok'
             
         # check validity of aurora's kw data for meter 
-        if meter_data['blue_pillar_kw'].all() == 0:
+        if meter_data['mean'].all() == 0:
             info_df.loc[meter, 'auroras'] = 'zeros'
-        elif meter_data['blue_pillar_kw'].isna().all():
+        elif meter_data['mean'].isna().all():
             info_df.loc[meter, 'auroras'] = 'missing'
         else:
             info_df.loc[meter, 'auroras'] = 'ok'
@@ -168,21 +172,21 @@ def get_comparison_info(merged_df, meters):
         # check if both are 'ok', then calculate
         if info_df.loc[meter, 'brians'] == 'ok' and info_df.loc[meter, 'auroras'] == 'ok':
             # get non-na values for comparison (keeps rows ONLY if BOTH columsn have non-na values)
-            valid_data = meter_data.dropna(subset=['kw', 'blue_pillar_kw']).copy()
+            valid_data = meter_data.dropna(subset=['mean_kw', 'mean']).copy()
 
             if len(valid_data) > 0:
                 # calculate correlation
-                correlation = valid_data['kw'].corr(valid_data['blue_pillar_kw'])
+                correlation = valid_data['mean_kw'].corr(valid_data['mean'])
 
                 # calculate percentage difference (how close the actual values are to eachother):
                 # difference between the two values (absolute to get how different)
-                difference = abs(valid_data['kw'] - valid_data['blue_pillar_kw'])
+                difference = abs(valid_data['mean_kw'] - valid_data['mean'])
 
-                # replace any zeros in 'kw' column with 'NaN' to avoid division by zero errors (to get meaningful % difference)
-                valid_data['kw'] = valid_data['kw'].replace(0, np.nan)
+                # replace any zeros in 'mean_kw' column with 'NaN' to avoid division by zero errors (to get meaningful % difference)
+                valid_data['mean_kw'] = valid_data['mean_kw'].replace(0, np.nan)
 
                 # percent difference column
-                valid_data['pct_diff'] = (difference / valid_data['kw']) * 100
+                valid_data['pct_diff'] = (difference / valid_data['mean_kw']) * 100
 
                 # average percent difference for meter
                 avg_pct_diff = valid_data['pct_diff'].mean()

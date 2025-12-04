@@ -90,6 +90,9 @@ def load_data_for_comparison(brian_csv, aurora_csv):
     if 'blue_pillar_kw' in merged_df.columns:
         merged_df.rename({'blue_pillar_kw': 'mean'}, inplace=True)
 
+    # make sure rows are sorted by meter name and datetime
+    merged_df = merged_df.sort_values(by=['datetime', 'meter_name'])
+
     # create list of unique meters
     meters = merged_df['meter_name'].unique()
 

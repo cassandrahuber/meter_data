@@ -157,7 +157,7 @@ def get_comparison_info(merged_df, meters):
         meter_data = merged_df[merged_df['meter_name'] == meter].sort_values('datetime')
         
         # check validity of brian's kw data for meter
-        if meter_data['mean_kw'].all() == 0:
+        if (meter_data['mean_kw'] == 0).all():
             info_df.loc[meter, 'brians'] = 'zeros'
         elif meter_data['mean_kw'].isna().all():
             info_df.loc[meter, 'brians'] = 'missing'
@@ -165,7 +165,7 @@ def get_comparison_info(merged_df, meters):
             info_df.loc[meter, 'brians'] = 'ok'
             
         # check validity of aurora's kw data for meter 
-        if meter_data['mean'].all() == 0:
+        if (meter_data['mean'] == 0).all():
             info_df.loc[meter, 'auroras'] = 'zeros'
         elif meter_data['mean'].isna().all():
             info_df.loc[meter, 'auroras'] = 'missing'
@@ -198,8 +198,10 @@ def get_comparison_info(merged_df, meters):
                 # r = 1.0 is perfect positive correlation, want diff % low as possible
                 if correlation > 0.95 and avg_pct_diff < 10:
                     info_df.loc[meter, 'match'] = 'yes'
+                elif correlation > 0.95:
+                    info_df.loc[meter, 'match'] = F'yes (high r={correlation:.2f}) but missing data'
                 else:
-                    info_df.loc[meter, 'match'] = f'no (r={correlation:.2f}, avg_pct_diff={avg_pct_diff:.1f}%)'
+                    info_df.loc[meter, 'match'] = F'no (r={correlation:.2f}, avg_pct_diff={avg_pct_diff:.1f}%)'
             else:
                 info_df.loc[meter, 'match'] = 'no valid data'
         else:

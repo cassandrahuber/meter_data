@@ -199,9 +199,9 @@ def get_comparison_info(merged_df, meters):
                 if correlation > 0.95 and avg_pct_diff < 10:
                     info_df.loc[meter, 'match'] = 'yes'
                 elif correlation > 0.95:
-                    info_df.loc[meter, 'match'] = F'yes (high r={correlation:.2f}) but missing data'
+                    info_df.loc[meter, 'match'] = f'yes (high r={correlation:.2f}) but missing data'
                 else:
-                    info_df.loc[meter, 'match'] = F'no (r={correlation:.2f}, avg_pct_diff={avg_pct_diff:.1f}%)'
+                    info_df.loc[meter, 'match'] = f'no (r={correlation:.2f}, avg_pct_diff={avg_pct_diff:.1f}%)'
             else:
                 info_df.loc[meter, 'match'] = 'no valid data'
         else:

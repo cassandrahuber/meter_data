@@ -60,6 +60,8 @@ def load_meter_dfs(basepath):
     Returns:
         list: List of dataframes, one for each meter.
     """
+    from io import StringIO
+
     # get list of csv file paths and their meter names
     csv_data = get_csv_paths(basepath)
 
@@ -69,7 +71,15 @@ def load_meter_dfs(basepath):
         dfs = []
 
         for csv_path in csv_paths:
-            df = pd.read_csv(csv_path, encoding='utf-8')
+            with open(csv_path, "rb") as f:
+                text = f.read().replace(b"\x00", b"").decode("utf-8", errors="replace").strip()
+
+            # skip completely empty files
+            if not text:
+                print(f"Skipping empty CSV: {csv_path}")
+                continue
+
+            df = pd.read_csv(StringIO(text), encoding='utf-8')
             df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
 
             # error in scripts, total_watt_hour is actually total kwh
@@ -78,13 +88,28 @@ def load_meter_dfs(basepath):
 
             # rename columns, some meters have different label but they are synonymous
             if '3_phase_positive_real_energy_used' in df.columns:
-                df.rename(columns = {
+                df.rename(columns={
                     '3_phase_positive_real_energy_used': 'kwh',
                     '3_phase_real_power': '3_phase_watt_total'
                 }, inplace=True)
 
+            required_cols = ['datetime', 'kwh', '3_phase_watt_total']
+
+            # skip if still empty
+            if df.empty:
+                print(f"Skipping CSV with no data rows: {csv_path}")
+                continue
+
+            missing_cols = [col for col in required_cols if col not in df.columns]
+
+            if missing_cols:
+                print(f"Skipping bad CSV: {csv_path}")
+                print(f"Missing columns: {missing_cols}")
+                print(f"Available columns: {df.columns.tolist()}")
+                continue
+
             # reorder columns
-            df = df[['datetime', 'kwh', '3_phase_watt_total']]
+            df = df[required_cols]
 
             dfs.append(df)
 
@@ -115,3 +140,31 @@ def concat_meter_dfs(meter_dfs):
     combined_df = pd.concat(meter_dfs, ignore_index=True)
 
     return combined_df
+
+def meter_list(csv_path):
+    """
+    Print and save a list of unique meter names from a combined meter CSV.
+
+    Parameters:
+        csv_path (str): Path to combined meter CSV.
+    """
+    df = pd.read_csv(csv_path)
+
+    if 'meter_name' not in df.columns:
+        raise ValueError(
+            f"'meter_name' column not found in {csv_path}. "
+            f"Available columns: {df.columns.tolist()}"
+        )
+
+    meters = sorted(df['meter_name'].dropna().unique())
+
+    print(f"Number of meters: {len(meters)}")
+    for meter in meters:
+        print(meter)
+
+    output_path = csv_path.replace('.csv', '_meter_list.csv')
+
+    pd.DataFrame({'meter_name': meters}).to_csv(output_path, index=False)
+
+    print(f"Meter list saved to: {output_path}")
+    

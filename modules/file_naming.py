@@ -1,6 +1,5 @@
 import pandas as pd
 
-# note: pass start and end or make equal to itself in passing
 def make_filename(df, name, var, ext):
     """
     Create a filename with the format: name_var_YYMMDD-YYMMDD.ext, where the first date is the

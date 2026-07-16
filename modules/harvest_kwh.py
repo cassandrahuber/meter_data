@@ -14,7 +14,7 @@ def load_kwh(data_path):
         dataframe: Loaded dataframe with datetime and numeric columns cleaned.
     """
     # load raw data from csv
-    df = pd.read_csv(data_path, encoding='utf-8')
+    df = pd.read_csv(data_path, encoding='utf-8', low_memory=False)
 
     # rename column kwh to meter_reading
     if 'kwh' in df.columns and 'meter_reading' not in df.columns:
@@ -23,17 +23,12 @@ def load_kwh(data_path):
     # convert datetime column to a datetime type
     df['datetime'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S', errors='coerce')
 
-    # # drop malformed rows that still could not be fixed
-    # bad_input_mask = (
-    #     df['datetime'].isna()
-    #     | df['meter_name'].isna()
-    #     | (df['meter_name'].astype(str).str.strip() == '')
-    #     | df['meter_reading'].isna()
-    # )
+        # convert meter reading to number so interpolation can subtract readings
+    df['meter_reading'] = pd.to_numeric(df['meter_reading'], errors='coerce')
 
-    # if bad_input_mask.any():
-    #     print(f"Dropped {bad_input_mask.sum()} malformed input rows before spike cleanup.")
-    #     df = df.loc[~bad_input_mask].copy()
+    # convert power column too, if it exists
+    if '3_phase_watt_total' in df.columns:
+        df['3_phase_watt_total'] = pd.to_numeric(df['3_phase_watt_total'], errors='coerce')
 
     return df
 
@@ -81,7 +76,7 @@ def remove_invalid_power_rows(meter_group, tiny_power_threshold=1e-20):
 
 def remove_kwh_spikes(meter_group, lookback_rows=90, lookback_minutes=60):
     """
-    Remove short-lived upward spike blocks when the meter jumps way up and then
+    Remove short lived upward spike blocks when the meter jumps way up and then
     returns back down near its earlier level.
     """
     meter_group = meter_group.sort_values('datetime').reset_index(drop=True).copy()
@@ -202,7 +197,7 @@ def process_kwh(df):
         meter_group = meter_group.sort_values('datetime').reset_index(drop=True)
 
         meter_times = pd.DatetimeIndex(meter_group['datetime'])
-        meter_readings = meter_group['meter_reading'].to_numpy()
+        meter_readings = pd.to_numeric(meter_group['meter_reading'], errors='coerce').to_numpy(dtype=float)
         meter_length = len(meter_group)
         
         # create target intervals

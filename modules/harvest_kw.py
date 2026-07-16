@@ -13,7 +13,7 @@ def load_data(data_path, info_path):
         info_df (dataframe): Cleaned meter info data.
     """
     # load data from csv files into dataframes
-    df = pd.read_csv(data_path, encoding='utf-8')
+    df = pd.read_csv(data_path, encoding='utf-8', low_memory=False)
     info_df = pd.read_csv(info_path, encoding='utf-8')
 
     # remove total watt hour column, it is not relevant to these calculations

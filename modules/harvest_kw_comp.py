@@ -15,23 +15,39 @@ def load_data_for_comparison(harvest_csv, aurora_csv):
     harvest_df = pd.read_csv(harvest_csv, encoding='utf-8')
     aurora_df = pd.read_csv(aurora_csv, encoding='utf-8')
 
+    harvest_df.columns = harvest_df.columns.str.lower().str.replace(' ', '_')
+    aurora_df.columns = aurora_df.columns.str.lower().str.replace(' ', '_')
+
     # convert datetime column to datetime type
     harvest_df['datetime'] = pd.to_datetime(harvest_df['datetime'])
     aurora_df['datetime'] = pd.to_datetime(aurora_df['datetime'])
 
+    # normalize Harvest kw column
+    if 'mean_kw' not in harvest_df.columns:
+        if 'mean' in harvest_df.columns:
+            harvest_df = harvest_df.rename(columns={'mean': 'mean_kw'})
+        else:
+            raise KeyError(f"Harvest file is missing a kw column. Columns: {harvest_df.columns.tolist()}")
+
+    # normalize Aurora kw column
+    if 'mean' not in aurora_df.columns:
+        if 'blue_pillar_kw' in aurora_df.columns:
+            aurora_df = aurora_df.rename(columns={'blue_pillar_kw': 'mean'})
+        elif 'mean_kw' in aurora_df.columns:
+            aurora_df = aurora_df.rename(columns={'mean_kw': 'mean'})
+        else:
+            raise KeyError(f"Aurora file is missing a kw column. Columns: {aurora_df.columns.tolist()}")
+        
     # merge the dataframes together on meter_name and datetime
-    merged_df = pd.merge(harvest_df, aurora_df, on=['meter_name', 'datetime'], how='outer')
-    merged_df.columns = merged_df.columns.str.lower().str.replace(' ', '_')
+    merged_df = pd.merge(
+        harvest_df[['meter_name', 'datetime', 'mean_kw']],
+        aurora_df[['meter_name', 'datetime', 'mean']],
+        on=['meter_name', 'datetime'],
+        how='outer'
+    )
 
-    # if blue_pillar_kw column exists, rename it to mean for consistency with database
-    if 'blue_pillar_kw' in merged_df.columns:
-        merged_df.rename({'blue_pillar_kw': 'mean'}, inplace=True)
-
-    # make sure rows are sorted by meter name and datetime
-    merged_df = merged_df.sort_values(by=['datetime', 'meter_name'])
-
-    # create list of unique meters
-    meters = merged_df['meter_name'].unique()
+    merged_df = merged_df.sort_values(by=['datetime', 'meter_name']).reset_index(drop=True)
+    meters = merged_df['meter_name'].dropna().unique()
 
     return merged_df, meters
 

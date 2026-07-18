@@ -11,6 +11,8 @@
    * Processing kw
 4. [harvest_comparison_aurora_kw.ipynb](notebooks/harvest_comparison_aurora_kw.ipynb)
    * Comparing Harvest vs. Aurora
+5. [harvest_aurora_kwh.ipynb](notebooks/harvest_aurora_kwh.ipynb)
+   * Processing kwh for Aurora using Harvest code
 
 * Self defined modules:
   * [harvest_kwh.py](harvest_kwh.py)

@@ -23,7 +23,7 @@ def load_kwh(data_path):
     # convert datetime column to a datetime type
     df['datetime'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S', errors='coerce')
 
-        # convert meter reading to number so interpolation can subtract readings
+    # convert meter reading to number so interpolation can subtract readings
     df['meter_reading'] = pd.to_numeric(df['meter_reading'], errors='coerce')
 
     # convert power column too, if it exists
@@ -187,102 +187,90 @@ def process_kwh(df):
 
     # make sure datetime is datetime type
     df['datetime'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S', errors='coerce')
-    
+
     df['is_exact'] = False
     df['interpolated'] = False
-    
-    all_rows = []
+
+    window = np.timedelta64(15, 'm')
+    meter_results = []
 
     for meter_name, meter_group in df.groupby('meter_name', sort=False):
         meter_group = meter_group.sort_values('datetime').reset_index(drop=True)
 
-        meter_times = pd.DatetimeIndex(meter_group['datetime'])
-        meter_readings = pd.to_numeric(meter_group['meter_reading'], errors='coerce').to_numpy(dtype=float)
+        times = meter_group['datetime'].to_numpy()
+        readings = meter_group['meter_reading'].to_numpy(dtype=float)
         meter_length = len(meter_group)
-        
+
         # create target intervals
         start = meter_group['datetime'].min().floor('15min')
         end = meter_group['datetime'].max().ceil('15min')
-        
-        # create list of every exact 15min timestamp that SHOULD exist for that meter
+
+        # create array of every exact 15min timestamp that SHOULD exist for that meter
         target_intervals = pd.date_range(start=start, end=end, freq='15min')
-        
-        # for each target interval check if a real reading exists
-        for interval in target_intervals:
-            interval_index = meter_times.searchsorted(interval)
-            exact_match_exists = (
-                interval_index < meter_length and meter_times[interval_index] == interval
-            )
+        target_arr = target_intervals.values
 
-            if exact_match_exists:
-                # real reading exists at this exact interval
-                row = meter_group.iloc[interval_index].copy()
-                row['is_exact'] = True
-                row['interpolated'] = False
-                all_rows.append(row)
-            else:
-                # only look within 15 minutes either side
-                window = pd.Timedelta(minutes=15)
+        # vectorized: find where each target interval would sit among the real readings
+        idx = np.searchsorted(times, target_arr, side='left')
+        idx_safe = np.clip(idx, 0, max(meter_length - 1, 0))
 
-                before_index = interval_index - 1
-                after_index = interval_index
+        exact_mask = (idx < meter_length) & (times[idx_safe] == target_arr)
 
-                valid_before = before_index >= 0
-                valid_after = after_index < meter_length
+        # real readings that land exactly on a 15 min grid point
+        exact_rows = meter_group.iloc[idx[exact_mask]].copy()
+        exact_rows['is_exact'] = True
+        exact_rows['interpolated'] = False
 
-                # only interpolate if we have readings on BOTH sides
-                if valid_before and valid_after:
-                    time_before = meter_times[before_index]
-                    time_after = meter_times[after_index]
+        # candidates for interpolation: readings within 15 minutes on both sides
+        before_idx = idx - 1
+        after_idx = idx
+        valid_before = before_idx >= 0
+        valid_after = after_idx < meter_length
 
-                    close_enough_before = (interval - time_before) <= window
-                    close_enough_after = (time_after - interval) <= window
+        before_idx_safe = np.clip(before_idx, 0, max(meter_length - 1, 0))
+        after_idx_safe = np.clip(after_idx, 0, max(meter_length - 1, 0))
 
-                    if close_enough_before and close_enough_after:
-                        reading_before = meter_readings[before_index]
-                        reading_after = meter_readings[after_index]
+        time_before = times[before_idx_safe]
+        time_after = times[after_idx_safe]
 
-                        time_diff = (time_after - time_before).total_seconds()
-                        reading_diff = reading_after - reading_before
+        close_enough_before = (target_arr - time_before) <= window
+        close_enough_after = (time_after - target_arr) <= window
 
-                        if time_diff == 0 or reading_diff == 0:
-                            # if no time difference or no reading difference, use the before reading
-                            estimated_kwh = reading_before
-                        else:
-                            slope = round(reading_diff / time_diff, 4)
-                            sec_before_interval = (interval - time_before).total_seconds()
-                            estimated_kwh = reading_before + (slope * sec_before_interval)
+        interp_mask = ~exact_mask & valid_before & valid_after & close_enough_before & close_enough_after
 
-                        # create interpolated row
-                        new_row = meter_group.iloc[before_index].copy()
-                        new_row['datetime'] = interval
-                        new_row['meter_reading'] = estimated_kwh
-                        new_row['is_exact'] = True
-                        new_row['interpolated'] = True
+        reading_before = readings[before_idx_safe]
+        reading_after = readings[after_idx_safe]
 
-                        # add new interpolated row to list
-                        all_rows.append(new_row)
-                    
-                    else:
-                        # no close enough readings on one or both sides, skip this interval
-                        pass
-                else:
-                    # no close enough readings on one or both sides, skip this interval
-                    pass
+        time_diff_sec = (time_after - time_before) / np.timedelta64(1, 's')
+        reading_diff = reading_after - reading_before
+        # if no time difference or no reading difference, use the before reading
+        no_slope = (time_diff_sec == 0) | (reading_diff == 0)
 
-        # keep original nonexact interval rows:
+        safe_time_diff_sec = np.where(time_diff_sec == 0, 1, time_diff_sec)
+        slope = np.round(np.where(no_slope, 0.0, reading_diff / safe_time_diff_sec), 4)
 
-        # creates T/F column for whether the datetime is in exact interval, then filter to only nonexact rows with ~
-        non_exact = meter_group[~meter_group['datetime'].isin(target_intervals)]
+        sec_before_interval = (target_arr - time_before) / np.timedelta64(1, 's')
+        estimated_kwh = np.where(no_slope, reading_before, reading_before + slope * sec_before_interval)
 
-        # add non exact rows to list of all rows
-        for _, row in non_exact.iterrows():     # _ is a placeholder for row index (don't need it)
-            all_rows.append(row)
+        # create interpolated rows (copy the "before" row's other columns, like the original did)
+        interp_rows = meter_group.iloc[before_idx_safe[interp_mask]].copy()
+        interp_rows['datetime'] = target_arr[interp_mask]
+        interp_rows['meter_reading'] = estimated_kwh[interp_mask]
+        interp_rows['is_exact'] = True
+        interp_rows['interpolated'] = True
 
-    # create final dataframe from list of all rows, sort by meter name and datetime, reset index
-    result = pd.DataFrame(all_rows)
+        # keep original nonexact interval rows
+        non_exact_rows = meter_group.loc[~meter_group['datetime'].isin(target_intervals)]
+
+        meter_results.append(pd.concat([exact_rows, interp_rows, non_exact_rows], ignore_index=True))
+
+    # create final dataframe from per-meter results, sort by meter name and datetime, reset index
+    if meter_results:
+        result = pd.concat(meter_results, ignore_index=True)
+    else:
+        result = df.iloc[0:0].copy()
+
     result = result.sort_values(by=['meter_name', 'datetime']).reset_index(drop=True)
-    
+
     return result
 
 

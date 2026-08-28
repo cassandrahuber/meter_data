@@ -1,3 +1,5 @@
+.venv/
+
 # ignore files generated in/by notebooks
 *.csv
 *.pdf

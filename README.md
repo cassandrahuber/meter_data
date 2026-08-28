@@ -14,11 +14,13 @@
 5. [harvest_aurora_kwh.ipynb](notebooks/harvest_aurora_kwh.ipynb)
    * Processing kwh for Aurora using Harvest code
 
-* Self defined modules:
-  * [harvest_kwh.py](harvest_kwh.py)
-  * [harvest_kw.py](harvest_kw.py)
-  * [file_naming.py](file_naming.py)
-  * [find_missing_data.py](find_missing_data.py) (extra)
+* Self defined modules (first-read guide: [modules/README.md](modules/README.md)):
+  * [harvest_orig.py](modules/harvest_orig.py)
+  * [harvest_kwh.py](modules/harvest_kwh.py)
+  * [harvest_kw.py](modules/harvest_kw.py)
+  * [harvest_kw_comp.py](modules/harvest_kw_comp.py)
+  * [file_naming.py](modules/file_naming.py)
+  * [find_missing_data.py](modules/find_missing_data.py) (extra)
 
 
 ### **Environment:**

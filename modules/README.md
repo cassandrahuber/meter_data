@@ -2,7 +2,7 @@
 
 This folder is a toolbox. The notebooks in `notebooks/` are the recipes that call these tools.
 
-You do not need to be a programmer to follow this page. Each section names a Python file, then walks through **every function** in that file: what it is for, what you give it, what you get back, and what to check if the result looks wrong.
+Each section names a Python file, then walks through **every function** in that file: what it is for, what you give it, what you get back, and what to check if the result looks wrong.
 
 ---
 
